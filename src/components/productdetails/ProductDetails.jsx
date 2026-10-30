@@ -57,12 +57,16 @@ function ProductDetails() {
     };
 
     try {
-      const existing = JSON.parse(localStorage.getItem("cart") || "[]");
+      const storedCart = JSON.parse(localStorage.getItem("cart") || "[]");
+      const existing = Array.isArray(storedCart) ? storedCart : [];
       const idx = existing.findIndex(
-        (i) => i.id === cartItem.id && i.size === cartItem.size && i.color === cartItem.color
+        (item) =>
+          String(item.id) === String(cartItem.id) &&
+          (item.size || "") === cartItem.size &&
+          (item.color || "") === cartItem.color
       );
       if (idx >= 0) {
-        existing[idx].quantity += quantity;
+        existing[idx].quantity = Math.max(1, Number(existing[idx].quantity) || 1) + quantity;
       } else {
         existing.push(cartItem);
       }

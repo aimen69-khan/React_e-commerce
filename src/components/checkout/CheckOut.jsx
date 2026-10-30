@@ -1,15 +1,26 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import "./CheckOut.css";
 import { useAuth } from "../../context/AuthContext";
 import LoginModal from "../auth/LoginModal";
 import { ordersAPI, cartAPI } from "../../api/client";
 
+function getCartItemKey(item) {
+  return [item.id, item.size || "", item.color || ""].map(String).join("::");
+}
+
 function getStoredCart() {
   try {
-    const stored = localStorage.getItem("cart");
-    return stored ? JSON.parse(stored) : [];
-  } catch (err) {
+    const stored = JSON.parse(localStorage.getItem("cart") || "[]");
+    if (!Array.isArray(stored)) return [];
+    return stored
+      .filter((item) => item && item.id !== undefined && item.id !== null)
+      .map((item) => ({
+        ...item,
+        quantity: Math.max(1, Number.parseInt(item.quantity, 10) || 1),
+        price: Number(item.price) || 0,
+      }));
+  } catch {
     return [];
   }
 }
@@ -22,7 +33,6 @@ function Cart() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { isAuthenticated, user } = useAuth();
-  const navigate = useNavigate();
 
   const [shipping, setShipping] = useState({
     fullName: "",
@@ -47,26 +57,28 @@ function Cart() {
     }
   }, [user]);
 
-  const increaseQuantity = (id) => {
+  const increaseQuantity = (itemKey) => {
     setCartItems((items) =>
       items.map((item) =>
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-      )
-    );
-  };
-
-  const decreaseQuantity = (id) => {
-    setCartItems((items) =>
-      items.map((item) =>
-        item.id === id && item.quantity > 1
-          ? { ...item, quantity: item.quantity - 1 }
+        getCartItemKey(item) === itemKey
+          ? { ...item, quantity: Math.max(1, Number(item.quantity) || 1) + 1 }
           : item
       )
     );
   };
 
-  const removeItem = (id) => {
-    setCartItems((items) => items.filter((item) => item.id !== id));
+  const decreaseQuantity = (itemKey) => {
+    setCartItems((items) =>
+      items.map((item) =>
+        getCartItemKey(item) === itemKey
+          ? { ...item, quantity: Math.max(1, (Number(item.quantity) || 1) - 1) }
+          : item
+      )
+    );
+  };
+
+  const removeItem = (itemKey) => {
+    setCartItems((items) => items.filter((item) => getCartItemKey(item) !== itemKey));
   };
 
   const subtotal = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
@@ -155,8 +167,10 @@ function Cart() {
               <Link to="/" className="continue-shopping-btn">Continue Shopping</Link>
             </div>
           ) : (
-            cartItems.map((item) => (
-              <div className="cart-item" key={item.id + (item.size || "") + (item.color || "")}>
+            cartItems.map((item) => {
+              const itemKey = getCartItemKey(item);
+              return (
+              <div className="cart-item" key={itemKey}>
                 <div className="cart-item-image">
                   <img src={item.image} alt={item.name} />
                 </div>
@@ -165,15 +179,19 @@ function Cart() {
                   {item.size && <p>Size: {item.size}</p>}
                   {item.color && <p>Color: {item.color}</p>}
                   <p className="cart-item-price">${item.price}</p>
-                  <button className="remove-btn" onClick={() => removeItem(item.id)}>Remove</button>
-                  <div className="quantity-box">
-                    <button onClick={() => decreaseQuantity(item.id)}>−</button>
+                  <button className="remove-btn" onClick={() => removeItem(itemKey)} aria-label={`Remove ${item.name} from cart`}>Remove</button>
+                </div>
+                <div className="cart-item-controls">
+                  <strong className="cart-line-total">${(Number(item.price) * Number(item.quantity)).toFixed(2)}</strong>
+                  <div className="quantity-box" aria-label={`Quantity for ${item.name}`}>
+                    <button type="button" onClick={() => decreaseQuantity(itemKey)} aria-label="Decrease quantity">−</button>
                     <span>{item.quantity}</span>
-                    <button onClick={() => increaseQuantity(item.id)}>+</button>
+                    <button type="button" onClick={() => increaseQuantity(itemKey)} aria-label="Increase quantity">+</button>
                   </div>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
 
